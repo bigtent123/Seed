@@ -34,8 +34,8 @@ export default async (request: Request) => {
     return jsonResponse(400, { error: "Request body must be valid JSON." });
   }
 
-  if (!input.advancedPayload && !cleanString(input.prompt)) {
-    return jsonResponse(400, { error: "Prompt is required." });
+  if (!input.advancedPayload && !cleanString(input.textPrompt || input.prompt)) {
+    return jsonResponse(400, { error: "Spoken script is required." });
   }
 
   const now = new Date().toISOString();

@@ -6,6 +6,7 @@ const DEFAULT_ENDPOINT =
   "https://voice.ap-southeast-1.bytepluses.com/api/v3/tts/create";
 
 export type GenerateAudioRequest = {
+  textPrompt?: string;
   prompt?: string;
   voice?: string;
   audioUrls?: string[];
@@ -136,6 +137,7 @@ export const buildPayload = (input: GenerateAudioRequest) => {
     return input.advancedPayload;
   }
 
+  const textPrompt = cleanString(input.textPrompt) || cleanString(input.prompt);
   const prompt = cleanString(input.prompt);
   const targetDuration = isFiniteNumber(input.targetDurationSeconds)
     ? Math.min(120, Math.max(1, Math.round(input.targetDurationSeconds)))
@@ -145,13 +147,22 @@ export const buildPayload = (input: GenerateAudioRequest) => {
     : [];
   const payload: Record<string, unknown> = {
     model: "seed-audio-1.0",
-    text_prompt: targetDuration
-      ? `${prompt}\n\nTarget length: approximately ${targetDuration} seconds. Keep the generated audio within this duration.`
-      : prompt,
+    text_prompt: textPrompt,
   };
 
   const voice = cleanString(input.voice);
   const imageUrl = cleanString(input.imageUrl);
+  const promptParts = [
+    prompt,
+    targetDuration
+      ? `Target length: approximately ${targetDuration} seconds. Keep the generated audio within this duration.`
+      : "",
+    imageUrl
+      ? "Use the attached image as visual reference for the character, company, mood, and audio style."
+      : "",
+  ].filter(Boolean);
+
+  if (promptParts.length > 0) payload.prompt = promptParts.join("\n\n");
   if (voice) payload.voice = voice;
   if (audioUrls.length > 0) payload.audio_urls = audioUrls;
   if (imageUrl) payload.image_url = imageUrl;

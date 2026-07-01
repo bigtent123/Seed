@@ -37,8 +37,9 @@ const pollDelayMs = 3000;
 const maxPollAttempts = 200;
 const maxReferenceFileBytes = 10 * 1024 * 1024;
 
+const defaultTextPrompt = "Welcome to the Seed Audio demo.";
 const defaultPrompt =
-  "Generate a 20-second cinematic intro for a technology podcast. Start with a warm narrator saying, 'Welcome to the Seed Audio demo,' then add subtle synth pulses and a clean logo hit.";
+  "Create a cinematic technology podcast intro with subtle synth pulses, a confident warm narrator, and a clean logo hit.";
 
 const getByPath = (value: unknown, path: string[]) =>
   path.reduce<unknown>((current, key) => {
@@ -107,6 +108,7 @@ const clampTargetDuration = (duration: number) =>
   Number.isFinite(duration) ? Math.min(120, Math.max(1, Math.round(duration))) : 20;
 
 function App() {
+  const [textPrompt, setTextPrompt] = useState(defaultTextPrompt);
   const [prompt, setPrompt] = useState(defaultPrompt);
   const [voice, setVoice] = useState("");
   const [audioUrls, setAudioUrls] = useState(["", "", ""]);
@@ -129,10 +131,17 @@ function App() {
 
   const generatedPayload = useMemo(() => {
     const targetDuration = clampTargetDuration(targetDurationSeconds);
-    const promptedDuration = `${prompt}\n\nTarget length: approximately ${targetDuration} seconds. Keep the generated audio within this duration.`;
+    const directionParts = [
+      prompt,
+      `Target length: approximately ${targetDuration} seconds. Keep the generated audio within this duration.`,
+      imageUrl.trim()
+        ? "Use the attached image as visual reference for the character, company, mood, and audio style."
+        : "",
+    ].filter(Boolean);
     const payload: Record<string, unknown> = {
       model: "seed-audio-1.0",
-      text_prompt: promptedDuration,
+      text_prompt: textPrompt,
+      prompt: directionParts.join("\n\n"),
       output_format: outputFormat,
       sample_rate: sampleRate,
       speed,
@@ -155,6 +164,7 @@ function App() {
     sampleRate,
     speed,
     targetDurationSeconds,
+    textPrompt,
     voice,
     volume,
   ]);
@@ -218,6 +228,7 @@ function App() {
       requestBody = useAdvancedPayload
         ? { advancedPayload: JSON.parse(advancedPayload) }
         : {
+            textPrompt,
             prompt,
             voice,
             audioUrls: [
@@ -324,8 +335,15 @@ function App() {
       <section className="grid">
         <form className="panel form-panel" onSubmit={submit}>
           <label className="field field-full">
-            <span>Prompt</span>
-            <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={9} />
+            <span>Spoken script (text_prompt)</span>
+            <textarea value={textPrompt} onChange={(event) => setTextPrompt(event.target.value)} rows={5} />
+            <small>This is the text Seed Audio will speak. Do not put stage directions here unless you want them read aloud.</small>
+          </label>
+
+          <label className="field field-full">
+            <span>Audio direction (prompt)</span>
+            <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={6} />
+            <small>Use this for style, scene, mood, image instructions, music, ambience, and sound effects.</small>
           </label>
 
           <div className="field-row">
@@ -487,7 +505,7 @@ function App() {
             />
           </label>
 
-          <button disabled={isGenerating || (!prompt.trim() && !useAdvancedPayload)} type="submit">
+          <button disabled={isGenerating || (!textPrompt.trim() && !useAdvancedPayload)} type="submit">
             {isGenerating ? "Generating..." : "Generate audio"}
           </button>
         </form>
