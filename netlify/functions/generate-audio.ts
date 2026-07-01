@@ -1,123 +1,27 @@
-import type { Handler } from "@netlify/functions";
-import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
+import {
+  cleanString,
+  type GenerateAudioRequest,
+  hasSeedAudioCredentials,
+  jsonResponse,
+  writeJob,
+} from "./seed-audio";
 
-const DEFAULT_ENDPOINT =
-  "https://voice.ap-southeast-1.bytepluses.com/api/v3/tts/create";
+const getBackgroundUrl = (request: Request) => {
+  const requestUrl = new URL(request.url);
+  const protocol = request.headers.get("x-forwarded-proto") || requestUrl.protocol.replace(":", "");
+  const host = request.headers.get("host") || requestUrl.host;
 
-type GenerateAudioRequest = {
-  prompt?: string;
-  voice?: string;
-  audioUrls?: string[];
-  imageUrl?: string;
-  outputFormat?: "wav" | "mp3" | "pcm" | "ogg_opus";
-  sampleRate?: number;
-  speed?: number;
-  volume?: number;
-  pitch?: number;
-  advancedPayload?: unknown;
+  return `${protocol}://${host}/.netlify/functions/generate-audio-worker`;
 };
 
-const json = (statusCode: number, body: unknown) => ({
-  statusCode,
-  headers: {
-    "content-type": "application/json",
-    "cache-control": "no-store",
-  },
-  body: JSON.stringify(body),
-});
-
-const cleanString = (value: unknown) =>
-  typeof value === "string" ? value.trim() : "";
-
-const isFiniteNumber = (value: unknown): value is number =>
-  typeof value === "number" && Number.isFinite(value);
-
-const inferAudioMimeType = (base64Audio: string, outputFormat?: string) => {
-  if (base64Audio.startsWith("UklGR")) return "audio/wav";
-  if (base64Audio.startsWith("T2dn")) return "audio/ogg";
-  if (base64Audio.startsWith("SUQz") || base64Audio.startsWith("//")) return "audio/mpeg";
-
-  switch (outputFormat) {
-    case "wav":
-      return "audio/wav";
-    case "ogg_opus":
-      return "audio/ogg";
-    case "pcm":
-      return "audio/L16";
-    default:
-      return "audio/mpeg";
-  }
-};
-
-const normalizeAudio = (upstream: unknown, input: GenerateAudioRequest) => {
-  if (!upstream || typeof upstream !== "object") return undefined;
-
-  const upstreamRecord = upstream as Record<string, unknown>;
-  const audioUrl = upstreamRecord.url;
-  const audioBase64 = upstreamRecord.audio;
-
-  if (typeof audioUrl === "string" && audioUrl.length > 0) {
-    return {
-      url: audioUrl,
-      duration: upstreamRecord.duration,
-      original_duration: upstreamRecord.original_duration,
-    };
+export default async (request: Request) => {
+  if (request.method !== "POST") {
+    return jsonResponse(405, { error: "Method not allowed. Use POST." });
   }
 
-  if (typeof audioBase64 === "string" && audioBase64.length > 0) {
-    const contentType = inferAudioMimeType(audioBase64, input.outputFormat);
-    return {
-      content_type: contentType,
-      data_uri: `data:${contentType};base64,${audioBase64}`,
-      duration: upstreamRecord.duration,
-      original_duration: upstreamRecord.original_duration,
-    };
-  }
-
-  return undefined;
-};
-
-const buildPayload = (input: GenerateAudioRequest) => {
-  if (input.advancedPayload && typeof input.advancedPayload === "object") {
-    return input.advancedPayload;
-  }
-
-  const prompt = cleanString(input.prompt);
-  const audioUrls = Array.isArray(input.audioUrls)
-    ? input.audioUrls.map(cleanString).filter(Boolean).slice(0, 3)
-    : [];
-  const payload: Record<string, unknown> = {
-    model: "seed-audio-1.0",
-    text_prompt: prompt,
-  };
-
-  const voice = cleanString(input.voice);
-  const imageUrl = cleanString(input.imageUrl);
-  if (voice) payload.voice = voice;
-  if (audioUrls.length > 0) payload.audio_urls = audioUrls;
-  if (imageUrl) payload.image_url = imageUrl;
-  if (input.outputFormat) payload.output_format = input.outputFormat;
-  if (isFiniteNumber(input.sampleRate)) payload.sample_rate = input.sampleRate;
-  if (isFiniteNumber(input.speed)) payload.speed = input.speed;
-  if (isFiniteNumber(input.volume)) payload.volume = input.volume;
-  if (isFiniteNumber(input.pitch)) payload.pitch = input.pitch;
-
-  return payload;
-};
-
-export const handler: Handler = async (event) => {
-  if (event.httpMethod !== "POST") {
-    return json(405, { error: "Method not allowed. Use POST." });
-  }
-
-  const apiKey = process.env.SEED_AUDIO_API_KEY;
-  const appId = process.env.SEED_AUDIO_APP_ID;
-  const accessKey = process.env.SEED_AUDIO_ACCESS_KEY;
-  const endpoint = process.env.SEED_AUDIO_ENDPOINT || DEFAULT_ENDPOINT;
-
-  if (!apiKey && !(appId && accessKey)) {
-    return json(500, {
+  if (!hasSeedAudioCredentials()) {
+    return jsonResponse(500, {
       error:
         "Seed Audio credentials are not configured. Set SEED_AUDIO_API_KEY in Netlify, or set SEED_AUDIO_APP_ID and SEED_AUDIO_ACCESS_KEY for legacy auth.",
     });
@@ -125,69 +29,57 @@ export const handler: Handler = async (event) => {
 
   let input: GenerateAudioRequest;
   try {
-    input = event.body ? JSON.parse(event.body) : {};
+    input = (await request.json()) as GenerateAudioRequest;
   } catch {
-    return json(400, { error: "Request body must be valid JSON." });
+    return jsonResponse(400, { error: "Request body must be valid JSON." });
   }
 
   if (!input.advancedPayload && !cleanString(input.prompt)) {
-    return json(400, { error: "Prompt is required." });
+    return jsonResponse(400, { error: "Prompt is required." });
   }
 
-  const requestId = randomUUID();
-  const headers: Record<string, string> = {
-    "content-type": "application/json",
-    "x-api-request-id": requestId,
-  };
+  const now = new Date().toISOString();
+  const jobId = randomUUID();
+  await writeJob({
+    id: jobId,
+    status: "queued",
+    createdAt: now,
+    updatedAt: now,
+    message: "Generation queued.",
+  });
 
-  if (apiKey) {
-    headers["x-api-key"] = apiKey;
-  } else {
-    headers["x-api-app-id"] = appId as string;
-    headers["x-api-access-key"] = accessKey as string;
-  }
+  const backgroundResponse = await fetch(getBackgroundUrl(request), {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ jobId, input }),
+  });
 
-  const payload = buildPayload(input);
-
-  try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(payload),
+  if (!backgroundResponse.ok && backgroundResponse.status !== 202) {
+    const detail = await backgroundResponse.text();
+    await writeJob({
+      id: jobId,
+      status: "failed",
+      createdAt: now,
+      updatedAt: new Date().toISOString(),
+      error: "Could not start background generation.",
+      detail,
     });
-    const contentType = response.headers.get("content-type") || "";
 
-    if (contentType.includes("application/json")) {
-      const upstreamJson = await response.json();
-      const audio = normalizeAudio(upstreamJson, input);
-      return json(response.ok ? 200 : response.status, {
-        ok: response.ok,
-        requestId,
-        endpoint,
-        payload,
-        audio,
-        upstream: upstreamJson,
-      });
-    }
-
-    const arrayBuffer = await response.arrayBuffer();
-    const base64 = Buffer.from(arrayBuffer).toString("base64");
-    return json(response.ok ? 200 : response.status, {
-      ok: response.ok,
-      requestId,
-      endpoint,
-      payload,
-      upstream: {
-        content_type: contentType || "application/octet-stream",
-        data_uri: `data:${contentType || "application/octet-stream"};base64,${base64}`,
-      },
-    });
-  } catch (error) {
-    return json(502, {
-      error: "Seed Audio request failed.",
-      detail: error instanceof Error ? error.message : String(error),
-      endpoint,
-      payload,
+    return jsonResponse(502, {
+      ok: false,
+      jobId,
+      error: "Could not start background generation.",
+      detail,
     });
   }
+
+  return jsonResponse(202, {
+    ok: true,
+    jobId,
+    status: "queued",
+    statusUrl: `/api/generate-audio-status?jobId=${jobId}`,
+    message: "Generation started. The app will poll until the audio is ready.",
+  });
 };

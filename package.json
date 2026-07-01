@@ -11,6 +11,7 @@
     "netlify:deploy": "npx netlify deploy --prod --build"
   },
   "dependencies": {
+    "@netlify/blobs": "^10.7.9",
     "@netlify/functions": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
@@ -22,5 +23,11 @@
   },
   "devDependencies": {
     "@types/node": "^26.0.1"
+  },
+  "overrides": {
+    "@opentelemetry/core": "2.8.0",
+    "@opentelemetry/resources": "2.8.0",
+    "@opentelemetry/sdk-trace-base": "2.8.0",
+    "@opentelemetry/sdk-trace-node": "2.8.0"
   }
 }

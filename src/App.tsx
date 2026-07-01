@@ -6,6 +6,11 @@ type GenerateResponse = {
   ok?: boolean;
   error?: string;
   detail?: string;
+  jobId?: string;
+  status?: "queued" | "running" | "completed" | "failed";
+  message?: string;
+  result?: GenerateResponse;
+  audio?: unknown;
   requestId?: string;
   endpoint?: string;
   payload?: unknown;
@@ -14,6 +19,8 @@ type GenerateResponse = {
 
 const sampleRates = [8000, 16000, 24000, 32000, 44100, 48000];
 const formats: OutputFormat[] = ["mp3", "wav", "pcm", "ogg_opus"];
+const pollDelayMs = 3000;
+const maxPollAttempts = 200;
 
 const defaultPrompt =
   "Generate a 20-second cinematic intro for a technology podcast. Start with a warm narrator saying, 'Welcome to the Seed Audio demo,' then add subtle synth pulses and a clean logo hit.";
@@ -75,6 +82,11 @@ const findAudioSource = (value: unknown): string | null => {
   return walk(value);
 };
 
+const sleep = (durationMs: number) =>
+  new Promise((resolve) => {
+    window.setTimeout(resolve, durationMs);
+  });
+
 function App() {
   const [prompt, setPrompt] = useState(defaultPrompt);
   const [voice, setVoice] = useState("");
@@ -91,6 +103,7 @@ function App() {
   const [audioSource, setAudioSource] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const generatedPayload = useMemo(() => {
     const payload: Record<string, unknown> = {
@@ -132,6 +145,7 @@ function App() {
     setError(null);
     setAudioSource(null);
     setResult(null);
+    setStatusMessage("Starting generation...");
 
     let requestBody: Record<string, unknown>;
     try {
@@ -168,12 +182,43 @@ function App() {
       setAudioSource(findAudioSource(data));
       if (!response.ok || data.ok === false) {
         setError(data.error || data.detail || "Seed Audio returned an error.");
+      } else if (response.status === 202 && data.jobId) {
+        setStatusMessage(data.message || "Generation queued...");
+        await pollGeneration(data.jobId);
       }
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Could not reach the API proxy.");
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const pollGeneration = async (jobId: string) => {
+    for (let attempt = 0; attempt < maxPollAttempts; attempt += 1) {
+      await sleep(pollDelayMs);
+
+      const response = await fetch(`/api/generate-audio-status?jobId=${encodeURIComponent(jobId)}`);
+      const data = (await response.json()) as GenerateResponse;
+      const displayResult = data.result || data;
+
+      setResult(data);
+      setAudioSource(findAudioSource(displayResult));
+      setStatusMessage(data.message || `Generation ${data.status || "running"}...`);
+
+      if (!response.ok || data.status === "failed") {
+        setError(data.error || data.detail || "Seed Audio returned an error.");
+        return;
+      }
+
+      if (data.status === "completed") {
+        setResult(displayResult);
+        setAudioSource(findAudioSource(displayResult));
+        setStatusMessage("Generation complete.");
+        return;
+      }
+    }
+
+    setError("Generation is still running. Refresh the page and try again in a moment.");
   };
 
   return (
@@ -321,6 +366,7 @@ function App() {
 
         <aside className="panel output-panel">
           <h2>Result</h2>
+          {statusMessage ? <div className="status-card">{statusMessage}</div> : null}
           {error ? <div className="alert">{error}</div> : null}
           {audioSource ? (
             <div className="audio-card">
