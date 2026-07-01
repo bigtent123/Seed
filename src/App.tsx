@@ -36,10 +36,11 @@ const formats: OutputFormat[] = ["mp3", "wav", "pcm", "ogg_opus"];
 const pollDelayMs = 3000;
 const maxPollAttempts = 200;
 const maxReferenceFileBytes = 10 * 1024 * 1024;
+const autoScriptTextPrompt = "Generate suitable spoken copy from the prompt.";
 
-const defaultTextPrompt = "Welcome to the Seed Audio demo.";
+const defaultTextPrompt = "";
 const defaultPrompt =
-  "Create a cinematic technology podcast intro with subtle synth pulses, a confident warm narrator, and a clean logo hit.";
+  "Create a 20-second cinematic technology podcast intro. Write a short welcome line yourself, use a confident warm narrator, add subtle synth pulses, and end with a clean logo hit.";
 
 const getByPath = (value: unknown, path: string[]) =>
   path.reduce<unknown>((current, key) => {
@@ -131,8 +132,12 @@ function App() {
 
   const generatedPayload = useMemo(() => {
     const targetDuration = clampTargetDuration(targetDurationSeconds);
+    const hasSpokenScript = Boolean(textPrompt.trim());
     const directionParts = [
       prompt,
+      hasSpokenScript
+        ? ""
+        : "Write natural spoken copy, dialogue, or narration based on this direction. Do not read the text_prompt placeholder sentence aloud.",
       `Target length: approximately ${targetDuration} seconds. Keep the generated audio within this duration.`,
       imageUrl.trim()
         ? "Use the attached image as visual reference for the character, company, mood, and audio style."
@@ -140,7 +145,7 @@ function App() {
     ].filter(Boolean);
     const payload: Record<string, unknown> = {
       model: "seed-audio-1.0",
-      text_prompt: textPrompt,
+      text_prompt: hasSpokenScript ? textPrompt : autoScriptTextPrompt,
       prompt: directionParts.join("\n\n"),
       output_format: outputFormat,
       sample_rate: sampleRate,
@@ -335,9 +340,12 @@ function App() {
       <section className="grid">
         <form className="panel form-panel" onSubmit={submit}>
           <label className="field field-full">
-            <span>Spoken script (text_prompt)</span>
+            <span>Spoken script (text_prompt, optional)</span>
             <textarea value={textPrompt} onChange={(event) => setTextPrompt(event.target.value)} rows={5} />
-            <small>This is the text Seed Audio will speak. Do not put stage directions here unless you want them read aloud.</small>
+            <small>
+              Leave blank to let Seed Audio write its own script from the audio direction. If filled, this is the exact
+              text to speak.
+            </small>
           </label>
 
           <label className="field field-full">
@@ -505,7 +513,7 @@ function App() {
             />
           </label>
 
-          <button disabled={isGenerating || (!textPrompt.trim() && !useAdvancedPayload)} type="submit">
+          <button disabled={isGenerating || (!textPrompt.trim() && !prompt.trim() && !useAdvancedPayload)} type="submit">
             {isGenerating ? "Generating..." : "Generate audio"}
           </button>
         </form>

@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 
 const DEFAULT_ENDPOINT =
   "https://voice.ap-southeast-1.bytepluses.com/api/v3/tts/create";
+const AUTO_SCRIPT_TEXT_PROMPT = "Generate suitable spoken copy from the prompt.";
 
 export type GenerateAudioRequest = {
   textPrompt?: string;
@@ -137,7 +138,8 @@ export const buildPayload = (input: GenerateAudioRequest) => {
     return input.advancedPayload;
   }
 
-  const textPrompt = cleanString(input.textPrompt) || cleanString(input.prompt);
+  const explicitTextPrompt = cleanString(input.textPrompt);
+  const textPrompt = explicitTextPrompt || AUTO_SCRIPT_TEXT_PROMPT;
   const prompt = cleanString(input.prompt);
   const targetDuration = isFiniteNumber(input.targetDurationSeconds)
     ? Math.min(120, Math.max(1, Math.round(input.targetDurationSeconds)))
@@ -154,6 +156,9 @@ export const buildPayload = (input: GenerateAudioRequest) => {
   const imageUrl = cleanString(input.imageUrl);
   const promptParts = [
     prompt,
+    explicitTextPrompt
+      ? ""
+      : "Write natural spoken copy, dialogue, or narration based on this direction. Do not read the text_prompt placeholder sentence aloud.",
     targetDuration
       ? `Target length: approximately ${targetDuration} seconds. Keep the generated audio within this duration.`
       : "",

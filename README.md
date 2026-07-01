@@ -13,8 +13,8 @@ https://voice.ap-southeast-1.bytepluses.com/api/v3/tts/create
 
 ## Features
 
-- Separate spoken script (`text_prompt`) and audio direction (`prompt`) fields, so scene/style
-  instructions are not read aloud.
+- Separate optional spoken script (`text_prompt`) and audio direction (`prompt`) fields, so Seed
+  Audio can either speak exact copy or write its own copy from your direction.
 - Optional voice, output format, sample rate, speed, volume, pitch, image URL, and up to three
   reference audio URLs.
 - Local audio/image attachments. The app uploads them to Netlify Blobs and exposes temporary public
@@ -90,8 +90,11 @@ npm run netlify:deploy
 - The docs and current BytePlus endpoint do not expose a reliable separate input field for exact
   output duration. The app controls length by inserting a target-duration sentence into `prompt`;
   keep direction prompts explicit, for example "make this 45 seconds".
-- Put only the words to be spoken in **Spoken script**. Put radio-ad concepts, image guidance,
-  music, ambience, sound effects, and style notes in **Audio direction**.
+- Leave **Spoken script** blank to let Seed Audio generate copy from **Audio direction**. The
+  BytePlus endpoint still requires a non-empty `text_prompt`, so the app sends a short internal
+  placeholder and tells the model not to read that placeholder aloud.
+- If you do fill **Spoken script**, put only the words to be spoken there. Put radio-ad concepts,
+  image guidance, music, ambience, sound effects, and style notes in **Audio direction**.
 - The voice/cloned voice field is sent as `voice` in normal mode. If **Use advanced raw request
   payload** is enabled, the JSON editor is authoritative, so add or edit `voice` there too.
 - If BytePlus changes optional request fields, enable **Use advanced raw request payload** in the app
