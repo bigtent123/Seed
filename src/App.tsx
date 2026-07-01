@@ -91,7 +91,7 @@ function App() {
   const generatedPayload = useMemo(() => {
     const payload: Record<string, unknown> = {
       model: "seed-audio-1.0",
-      prompt,
+      text_prompt: prompt,
       output_format: outputFormat,
       sample_rate: sampleRate,
       speed,

@@ -44,7 +44,7 @@ const buildPayload = (input: GenerateAudioRequest) => {
     : [];
   const payload: Record<string, unknown> = {
     model: "seed-audio-1.0",
-    prompt,
+    text_prompt: prompt,
   };
 
   const voice = cleanString(input.voice);
