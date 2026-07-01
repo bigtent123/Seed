@@ -5,7 +5,8 @@ export default async (request: Request) => {
     return jsonResponse(405, { error: "Method not allowed. Use GET." });
   }
 
-  const id = new URL(request.url).searchParams.get("id");
+  const url = new URL(request.url);
+  const id = url.searchParams.get("id") || decodeURIComponent(url.pathname.split("/").pop() || "");
   if (!id) {
     return jsonResponse(400, { error: "id is required." });
   }

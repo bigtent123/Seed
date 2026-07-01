@@ -20,7 +20,7 @@ const getPublicFileUrl = (request: Request, id: string) => {
   const protocol = request.headers.get("x-forwarded-proto") || requestUrl.protocol.replace(":", "");
   const host = request.headers.get("host") || requestUrl.host;
 
-  return `${protocol}://${host}/api/reference-file?id=${encodeURIComponent(id)}`;
+  return `${protocol}://${host}/api/reference-file/${encodeURIComponent(id)}`;
 };
 
 const getExtension = (file: File) => {
