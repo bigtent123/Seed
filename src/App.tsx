@@ -17,10 +17,25 @@ type GenerateResponse = {
   upstream?: unknown;
 };
 
+type UploadedReference = {
+  url: string;
+  fileName: string;
+  contentType: string;
+  size: number;
+};
+
+type UploadReferenceResponse = {
+  ok?: boolean;
+  error?: string;
+  audio?: UploadedReference[];
+  image?: UploadedReference;
+};
+
 const sampleRates = [8000, 16000, 24000, 32000, 44100, 48000];
 const formats: OutputFormat[] = ["mp3", "wav", "pcm", "ogg_opus"];
 const pollDelayMs = 3000;
 const maxPollAttempts = 200;
+const maxReferenceFileBytes = 10 * 1024 * 1024;
 
 const defaultPrompt =
   "Generate a 20-second cinematic intro for a technology podcast. Start with a warm narrator saying, 'Welcome to the Seed Audio demo,' then add subtle synth pulses and a clean logo hit.";
@@ -87,11 +102,18 @@ const sleep = (durationMs: number) =>
     window.setTimeout(resolve, durationMs);
   });
 
+const formatFileSize = (size: number) => `${(size / (1024 * 1024)).toFixed(2)} MB`;
+const clampTargetDuration = (duration: number) =>
+  Number.isFinite(duration) ? Math.min(120, Math.max(1, Math.round(duration))) : 20;
+
 function App() {
   const [prompt, setPrompt] = useState(defaultPrompt);
   const [voice, setVoice] = useState("");
   const [audioUrls, setAudioUrls] = useState(["", "", ""]);
+  const [audioFiles, setAudioFiles] = useState<(File | null)[]>([null, null, null]);
   const [imageUrl, setImageUrl] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [targetDurationSeconds, setTargetDurationSeconds] = useState(20);
   const [outputFormat, setOutputFormat] = useState<OutputFormat>("mp3");
   const [sampleRate, setSampleRate] = useState(24000);
   const [speed, setSpeed] = useState(1);
@@ -106,9 +128,11 @@ function App() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const generatedPayload = useMemo(() => {
+    const targetDuration = clampTargetDuration(targetDurationSeconds);
+    const promptedDuration = `${prompt}\n\nTarget length: approximately ${targetDuration} seconds. Keep the generated audio within this duration.`;
     const payload: Record<string, unknown> = {
       model: "seed-audio-1.0",
-      text_prompt: prompt,
+      text_prompt: promptedDuration,
       output_format: outputFormat,
       sample_rate: sampleRate,
       speed,
@@ -122,13 +146,30 @@ function App() {
     if (pitch !== 0) payload.pitch = pitch;
 
     return payload;
-  }, [audioUrls, imageUrl, outputFormat, pitch, prompt, sampleRate, speed, voice, volume]);
+  }, [
+    audioUrls,
+    imageUrl,
+    outputFormat,
+    pitch,
+    prompt,
+    sampleRate,
+    speed,
+    targetDurationSeconds,
+    voice,
+    volume,
+  ]);
 
   const payloadPreview = JSON.stringify(generatedPayload, null, 2);
 
   const updateAudioUrl = (index: number, value: string) => {
     setAudioUrls((current) =>
       current.map((url, currentIndex) => (currentIndex === index ? value : url)),
+    );
+  };
+
+  const updateAudioFile = (index: number, file: File | null) => {
+    setAudioFiles((current) =>
+      current.map((currentFile, currentIndex) => (currentIndex === index ? file : currentFile)),
     );
   };
 
@@ -147,15 +188,44 @@ function App() {
     setResult(null);
     setStatusMessage("Starting generation...");
 
+    const selectedAudioFiles = audioFiles.filter((file): file is File => Boolean(file));
+    const selectedAudioUrls = audioUrls.map((url) => url.trim()).filter(Boolean);
+    const hasAudioReferences = selectedAudioFiles.length > 0 || selectedAudioUrls.length > 0;
+    const hasImageReference = Boolean(imageUrl.trim() || imageFile);
+
+    if (!useAdvancedPayload && hasAudioReferences && hasImageReference) {
+      setIsGenerating(false);
+      setError("Seed Audio reference image input cannot be combined with audio references. Use audio or image, not both.");
+      return;
+    }
+
+    const oversizedFile = [...selectedAudioFiles, imageFile].find(
+      (file): file is File => Boolean(file && file.size > maxReferenceFileBytes),
+    );
+    if (oversizedFile) {
+      setIsGenerating(false);
+      setError(`${oversizedFile.name} is ${formatFileSize(oversizedFile.size)}. Reference files must be 10MB or smaller.`);
+      return;
+    }
+
     let requestBody: Record<string, unknown>;
     try {
+      const uploadedReferences =
+        !useAdvancedPayload && (selectedAudioFiles.length > 0 || imageFile)
+          ? await uploadReferences(selectedAudioFiles, imageFile)
+          : undefined;
+
       requestBody = useAdvancedPayload
         ? { advancedPayload: JSON.parse(advancedPayload) }
         : {
             prompt,
             voice,
-            audioUrls,
-            imageUrl,
+            audioUrls: [
+              ...selectedAudioUrls,
+              ...((uploadedReferences?.audio || []).map((reference) => reference.url)),
+            ],
+            imageUrl: imageUrl.trim() || uploadedReferences?.image?.url || "",
+            targetDurationSeconds,
             outputFormat,
             sampleRate,
             speed,
@@ -191,6 +261,25 @@ function App() {
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const uploadReferences = async (files: File[], image: File | null) => {
+    setStatusMessage("Uploading reference files...");
+    const formData = new FormData();
+    files.slice(0, 3).forEach((file) => formData.append("audio", file));
+    if (image) formData.append("image", image);
+
+    const response = await fetch("/api/upload-reference", {
+      method: "POST",
+      body: formData,
+    });
+    const data = (await response.json()) as UploadReferenceResponse;
+
+    if (!response.ok || data.ok === false) {
+      throw new Error(data.error || "Reference upload failed.");
+    }
+
+    return data;
   };
 
   const pollGeneration = async (jobId: string) => {
@@ -247,6 +336,7 @@ function App() {
                 onChange={(event) => setVoice(event.target.value)}
                 placeholder="Optional preset voice"
               />
+              <small>Normal mode sends this as <code>voice</code>. If raw payload mode is enabled, edit the JSON too.</small>
             </label>
 
             <label className="field">
@@ -265,6 +355,19 @@ function App() {
           </div>
 
           <div className="field-row">
+            <label className="field">
+              <span>Target length</span>
+              <input
+                type="number"
+                min="1"
+                max="120"
+                step="1"
+                value={targetDurationSeconds}
+                onChange={(event) => setTargetDurationSeconds(Number(event.target.value))}
+              />
+              <small>BytePlus documents a 120s max. The app controls length by adding this instruction to the prompt.</small>
+            </label>
+
             <label className="field">
               <span>Sample rate</span>
               <select
@@ -318,16 +421,31 @@ function App() {
 
           <fieldset className="references">
             <legend>Reference inputs</legend>
-            <p>Use public URLs. Audio references can be mentioned in your prompt as @Audio1, @Audio2, and @Audio3.</p>
+            <p>
+              Use public URLs or attach local files. Audio references can be mentioned in your prompt as @Audio1,
+              @Audio2, and @Audio3. Reference files must be 10MB or smaller; audio clips should be 30 seconds or
+              shorter.
+            </p>
             {audioUrls.map((url, index) => (
-              <label className="field" key={`audio-${index + 1}`}>
-                <span>Audio URL {index + 1}</span>
-                <input
-                  value={url}
-                  onChange={(event) => updateAudioUrl(index, event.target.value)}
-                  placeholder="https://example.com/reference.mp3"
-                />
-              </label>
+              <div className="reference-pair" key={`audio-${index + 1}`}>
+                <label className="field">
+                  <span>Audio URL {index + 1}</span>
+                  <input
+                    value={url}
+                    onChange={(event) => updateAudioUrl(index, event.target.value)}
+                    placeholder="https://example.com/reference.mp3"
+                  />
+                </label>
+                <label className="field">
+                  <span>Or attach audio file {index + 1}</span>
+                  <input
+                    type="file"
+                    accept="audio/*,.wav,.mp3,.ogg,.opus,.pcm"
+                    onChange={(event) => updateAudioFile(index, event.target.files?.[0] || null)}
+                  />
+                  {audioFiles[index] ? <small>{audioFiles[index]?.name} ({formatFileSize(audioFiles[index]!.size)})</small> : null}
+                </label>
+              </div>
             ))}
             <label className="field">
               <span>Image URL</span>
@@ -337,6 +455,16 @@ function App() {
                 placeholder="https://example.com/reference.png"
               />
             </label>
+            <label className="field">
+              <span>Or attach image file</span>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(event) => setImageFile(event.target.files?.[0] || null)}
+              />
+              {imageFile ? <small>{imageFile.name} ({formatFileSize(imageFile.size)})</small> : null}
+            </label>
+            <p>Image references cannot be combined with audio references for Seed Audio.</p>
           </fieldset>
 
           <label className="toggle">

@@ -159,6 +159,16 @@ textarea {
   padding: 0.82rem 0.95rem;
 }
 
+small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+code {
+  color: #d8b4fe;
+}
+
 textarea {
   resize: vertical;
 }
@@ -184,6 +194,12 @@ textarea:focus {
   color: var(--muted);
   font-size: 0.92rem;
   line-height: 1.5;
+}
+
+.reference-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
 }
 
 .toggle {
@@ -271,7 +287,8 @@ summary {
   }
 
   .grid,
-  .field-row {
+  .field-row,
+  .reference-pair {
     grid-template-columns: 1fr;
   }
 

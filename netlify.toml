@@ -20,6 +20,16 @@
   status = 200
 
 [[redirects]]
+  from = "/api/upload-reference"
+  to = "/.netlify/functions/upload-reference"
+  status = 200
+
+[[redirects]]
+  from = "/api/reference-file"
+  to = "/.netlify/functions/reference-file"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200

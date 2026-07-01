@@ -10,6 +10,7 @@ export type GenerateAudioRequest = {
   voice?: string;
   audioUrls?: string[];
   imageUrl?: string;
+  targetDurationSeconds?: number;
   outputFormat?: "wav" | "mp3" | "pcm" | "ogg_opus";
   sampleRate?: number;
   speed?: number;
@@ -61,6 +62,8 @@ export const hasSeedAudioCredentials = () =>
   );
 
 export const getJobsStore = () => getStore("seed-audio-jobs");
+
+export const getReferenceFilesStore = () => getStore("seed-audio-reference-files");
 
 export const readJob = async (jobId: string) =>
   (await getJobsStore().get(jobId, { type: "json" })) as JobStatus | null;
@@ -134,12 +137,17 @@ export const buildPayload = (input: GenerateAudioRequest) => {
   }
 
   const prompt = cleanString(input.prompt);
+  const targetDuration = isFiniteNumber(input.targetDurationSeconds)
+    ? Math.min(120, Math.max(1, Math.round(input.targetDurationSeconds)))
+    : undefined;
   const audioUrls = Array.isArray(input.audioUrls)
     ? input.audioUrls.map(cleanString).filter(Boolean).slice(0, 3)
     : [];
   const payload: Record<string, unknown> = {
     model: "seed-audio-1.0",
-    text_prompt: prompt,
+    text_prompt: targetDuration
+      ? `${prompt}\n\nTarget length: approximately ${targetDuration} seconds. Keep the generated audio within this duration.`
+      : prompt,
   };
 
   const voice = cleanString(input.voice);

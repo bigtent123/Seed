@@ -16,6 +16,9 @@ https://voice.ap-southeast-1.bytepluses.com/api/v3/tts/create
 - Prompt-based Seed Audio generation UI.
 - Optional voice, output format, sample rate, speed, volume, pitch, image URL, and up to three
   reference audio URLs.
+- Local audio/image attachments. The app uploads them to Netlify Blobs and exposes temporary public
+  URLs for Seed Audio to fetch.
+- Target length control by adding an explicit duration instruction to `text_prompt`.
 - Advanced raw JSON payload override for newly released BytePlus request fields.
 - Audio playback/download when the API response contains an audio URL or data URI.
 - Raw response viewer for debugging request IDs and upstream API responses.
@@ -79,5 +82,14 @@ npm run netlify:deploy
 ## Notes
 
 - The Lark guide lists a 120-second output limit per request.
+- Reference audio clips should be 30 seconds or shorter and 10MB or smaller. The app supports up to
+  three local audio attachments or URLs, referenced in the prompt as `@Audio1`, `@Audio2`, and
+  `@Audio3`.
+- Seed Audio image references cannot be combined with audio references.
+- The docs and current BytePlus endpoint do not expose a reliable separate input field for exact
+  output duration. The app controls length by inserting a target-duration sentence into
+  `text_prompt`; keep prompts explicit, for example "make this 45 seconds".
+- The voice/cloned voice field is sent as `voice` in normal mode. If **Use advanced raw request
+  payload** is enabled, the JSON editor is authoritative, so add or edit `voice` there too.
 - If BytePlus changes optional request fields, enable **Use advanced raw request payload** in the app
   and paste the exact JSON body from the latest API documentation.
