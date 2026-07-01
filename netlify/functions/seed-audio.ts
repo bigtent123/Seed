@@ -55,6 +55,9 @@ export const cleanString = (value: unknown) =>
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value);
 
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, value));
+
 export const hasSeedAudioCredentials = () =>
   Boolean(
     process.env.SEED_AUDIO_API_KEY ||
@@ -150,23 +153,34 @@ export const buildPayload = (input: GenerateAudioRequest) => {
     targetDuration
       ? `Target length: approximately ${targetDuration} seconds. Keep the generated audio within this duration.`
       : "",
-    imageUrl
-      ? "Use the attached image as visual reference for the character, company, mood, and audio style."
-      : "",
   ].filter(Boolean);
+  const references: Record<string, string>[] = [];
+
+  if (imageUrl) {
+    references.push({ image_url: imageUrl });
+  } else {
+    if (voice) references.push({ speaker: voice });
+    references.push(...audioUrls.map((audioUrl) => ({ audio_url: audioUrl })));
+  }
+
   const payload: Record<string, unknown> = {
     model: "seed-audio-1.0",
     text_prompt: textPromptParts.join("\n\n"),
+    audio_config: {
+      format: input.outputFormat || "wav",
+      sample_rate: isFiniteNumber(input.sampleRate) ? input.sampleRate : 24000,
+      speech_rate: isFiniteNumber(input.speed)
+        ? clamp(Math.round((input.speed - 1) * 100), -50, 100)
+        : 0,
+      loudness_rate: isFiniteNumber(input.volume)
+        ? clamp(Math.round((input.volume - 1) * 100), -50, 100)
+        : 0,
+      pitch_rate: isFiniteNumber(input.pitch) ? clamp(Math.round(input.pitch), -12, 12) : 0,
+    },
+    watermark: {},
   };
 
-  if (voice) payload.voice = voice;
-  if (audioUrls.length > 0) payload.audio_urls = audioUrls;
-  if (imageUrl) payload.image_url = imageUrl;
-  if (input.outputFormat) payload.output_format = input.outputFormat;
-  if (isFiniteNumber(input.sampleRate)) payload.sample_rate = input.sampleRate;
-  if (isFiniteNumber(input.speed)) payload.speed = input.speed;
-  if (isFiniteNumber(input.volume)) payload.volume = input.volume;
-  if (isFiniteNumber(input.pitch)) payload.pitch = input.pitch;
+  if (references.length > 0) payload.references = references.slice(0, 3);
 
   return payload;
 };

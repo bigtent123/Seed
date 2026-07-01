@@ -14,8 +14,8 @@ https://voice.ap-southeast-1.bytepluses.com/api/v3/tts/create
 ## Features
 
 - Single BytePlus `text_prompt` prompt field for full Seed Audio scene requests.
-- Optional voice, output format, sample rate, speed, volume, pitch, image URL, and up to three
-  reference audio URLs.
+- Optional speaker, output format, sample rate, speech rate, loudness, pitch, image reference, and
+  up to three audio references using the documented `references` array.
 - Local audio/image attachments. The app uploads them to Netlify Blobs and exposes temporary public
   URLs for Seed Audio to fetch.
 - Target length control by adding an explicit duration instruction to `text_prompt`.
@@ -91,7 +91,8 @@ npm run netlify:deploy
 - The docs and current BytePlus endpoint do not expose a reliable separate input field for exact
   output duration. The app controls length by inserting a target-duration sentence into
   `text_prompt`; keep prompts explicit, for example "make this 45 seconds".
-- The voice/cloned voice field is sent as `voice` in normal mode. If **Use advanced raw request
-  payload** is enabled, the JSON editor is authoritative, so add or edit `voice` there too.
+- Voice/cloned voice IDs are sent as `references: [{ "speaker": "..." }]`, per the BytePlus guide.
+- Output settings are sent under `audio_config` using `format`, `sample_rate`, `speech_rate`,
+  `loudness_rate`, and `pitch_rate`.
 - If BytePlus changes optional request fields, enable **Use advanced raw request payload** in the app
   and paste the exact JSON body from the latest API documentation.

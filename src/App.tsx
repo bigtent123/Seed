@@ -105,6 +105,9 @@ const sleep = (durationMs: number) =>
 const formatFileSize = (size: number) => `${(size / (1024 * 1024)).toFixed(2)} MB`;
 const clampTargetDuration = (duration: number) =>
   Number.isFinite(duration) ? Math.min(120, Math.max(1, Math.round(duration))) : 20;
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, value));
+const toRate = (value: number) => clamp(Math.round((value - 1) * 100), -50, 100);
 
 function App() {
   const [prompt, setPrompt] = useState(defaultPrompt);
@@ -132,24 +135,28 @@ function App() {
     const textPromptParts = [
       prompt,
       `Target length: approximately ${targetDuration} seconds. Keep the generated audio within this duration.`,
-      imageUrl.trim()
-        ? "Use the attached image as visual reference for the character, company, mood, and audio style."
-        : "",
     ].filter(Boolean);
+    const cleanedAudioUrls = audioUrls.map((url) => url.trim()).filter(Boolean);
+    const references = imageUrl.trim()
+      ? [{ image_url: imageUrl.trim() }]
+      : [
+          ...(voice.trim() ? [{ speaker: voice.trim() }] : []),
+          ...cleanedAudioUrls.map((audioUrl) => ({ audio_url: audioUrl })),
+        ].slice(0, 3);
     const payload: Record<string, unknown> = {
       model: "seed-audio-1.0",
       text_prompt: textPromptParts.join("\n\n"),
-      output_format: outputFormat,
-      sample_rate: sampleRate,
-      speed,
-      volume,
+      audio_config: {
+        format: outputFormat,
+        sample_rate: sampleRate,
+        speech_rate: toRate(speed),
+        loudness_rate: toRate(volume),
+        pitch_rate: clamp(Math.round(pitch), -12, 12),
+      },
+      watermark: {},
     };
-    const cleanedAudioUrls = audioUrls.map((url) => url.trim()).filter(Boolean);
 
-    if (voice.trim()) payload.voice = voice.trim();
-    if (cleanedAudioUrls.length > 0) payload.audio_urls = cleanedAudioUrls;
-    if (imageUrl.trim()) payload.image_url = imageUrl.trim();
-    if (pitch !== 0) payload.pitch = pitch;
+    if (references.length > 0) payload.references = references;
 
     return payload;
   }, [
@@ -196,12 +203,13 @@ function App() {
 
     const selectedAudioFiles = audioFiles.filter((file): file is File => Boolean(file));
     const selectedAudioUrls = audioUrls.map((url) => url.trim()).filter(Boolean);
-    const hasAudioReferences = selectedAudioFiles.length > 0 || selectedAudioUrls.length > 0;
+    const hasAudioReferences =
+      Boolean(voice.trim()) || selectedAudioFiles.length > 0 || selectedAudioUrls.length > 0;
     const hasImageReference = Boolean(imageUrl.trim() || imageFile);
 
     if (!useAdvancedPayload && hasAudioReferences && hasImageReference) {
       setIsGenerating(false);
-      setError("Seed Audio reference image input cannot be combined with audio references. Use audio or image, not both.");
+      setError("Seed Audio image references cannot be combined with speaker, audio URL, or audio file references.");
       return;
     }
 
@@ -346,7 +354,10 @@ function App() {
                 onChange={(event) => setVoice(event.target.value)}
                 placeholder="Optional preset voice"
               />
-              <small>Normal mode sends this as <code>voice</code>. If raw payload mode is enabled, edit the JSON too.</small>
+              <small>
+                Normal mode sends this as a <code>{"{ \"speaker\": \"...\" }"}</code> reference. Do not use it together
+                with an image reference.
+              </small>
             </label>
 
             <label className="field">
@@ -474,7 +485,7 @@ function App() {
               />
               {imageFile ? <small>{imageFile.name} ({formatFileSize(imageFile.size)})</small> : null}
             </label>
-            <p>Image references cannot be combined with audio references for Seed Audio.</p>
+            <p>Image references cannot be combined with speaker or audio references for Seed Audio.</p>
           </fieldset>
 
           <label className="toggle">
