@@ -28,7 +28,11 @@ const getByPath = (value: unknown, path: string[]) =>
 
 const findAudioSource = (value: unknown): string | null => {
   const priorityPaths = [
+    ["audio", "url"],
+    ["audio", "data_uri"],
+    ["audio", "audio_url"],
     ["upstream", "audio", "url"],
+    ["upstream", "url"],
     ["upstream", "audio_url"],
     ["upstream", "output_audio_url"],
     ["upstream", "result", "audio", "url"],

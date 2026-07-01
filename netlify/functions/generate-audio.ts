@@ -33,6 +33,51 @@ const cleanString = (value: unknown) =>
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value);
 
+const inferAudioMimeType = (base64Audio: string, outputFormat?: string) => {
+  if (base64Audio.startsWith("UklGR")) return "audio/wav";
+  if (base64Audio.startsWith("T2dn")) return "audio/ogg";
+  if (base64Audio.startsWith("SUQz") || base64Audio.startsWith("//")) return "audio/mpeg";
+
+  switch (outputFormat) {
+    case "wav":
+      return "audio/wav";
+    case "ogg_opus":
+      return "audio/ogg";
+    case "pcm":
+      return "audio/L16";
+    default:
+      return "audio/mpeg";
+  }
+};
+
+const normalizeAudio = (upstream: unknown, input: GenerateAudioRequest) => {
+  if (!upstream || typeof upstream !== "object") return undefined;
+
+  const upstreamRecord = upstream as Record<string, unknown>;
+  const audioUrl = upstreamRecord.url;
+  const audioBase64 = upstreamRecord.audio;
+
+  if (typeof audioUrl === "string" && audioUrl.length > 0) {
+    return {
+      url: audioUrl,
+      duration: upstreamRecord.duration,
+      original_duration: upstreamRecord.original_duration,
+    };
+  }
+
+  if (typeof audioBase64 === "string" && audioBase64.length > 0) {
+    const contentType = inferAudioMimeType(audioBase64, input.outputFormat);
+    return {
+      content_type: contentType,
+      data_uri: `data:${contentType};base64,${audioBase64}`,
+      duration: upstreamRecord.duration,
+      original_duration: upstreamRecord.original_duration,
+    };
+  }
+
+  return undefined;
+};
+
 const buildPayload = (input: GenerateAudioRequest) => {
   if (input.advancedPayload && typeof input.advancedPayload === "object") {
     return input.advancedPayload;
@@ -114,11 +159,13 @@ export const handler: Handler = async (event) => {
 
     if (contentType.includes("application/json")) {
       const upstreamJson = await response.json();
+      const audio = normalizeAudio(upstreamJson, input);
       return json(response.ok ? 200 : response.status, {
         ok: response.ok,
         requestId,
         endpoint,
         payload,
+        audio,
         upstream: upstreamJson,
       });
     }
