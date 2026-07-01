@@ -36,11 +36,9 @@ const formats: OutputFormat[] = ["mp3", "wav", "pcm", "ogg_opus"];
 const pollDelayMs = 3000;
 const maxPollAttempts = 200;
 const maxReferenceFileBytes = 10 * 1024 * 1024;
-const autoScriptTextPrompt = "Generate suitable spoken copy from the prompt.";
 
-const defaultTextPrompt = "";
 const defaultPrompt =
-  "Create a 20-second cinematic technology podcast intro. Write a short welcome line yourself, use a confident warm narrator, add subtle synth pulses, and end with a clean logo hit.";
+  "Create a 20-second cinematic technology podcast intro. Write a short welcome line, use a confident warm narrator, add subtle synth pulses, and end with a clean logo hit.";
 
 const getByPath = (value: unknown, path: string[]) =>
   path.reduce<unknown>((current, key) => {
@@ -109,7 +107,6 @@ const clampTargetDuration = (duration: number) =>
   Number.isFinite(duration) ? Math.min(120, Math.max(1, Math.round(duration))) : 20;
 
 function App() {
-  const [textPrompt, setTextPrompt] = useState(defaultTextPrompt);
   const [prompt, setPrompt] = useState(defaultPrompt);
   const [voice, setVoice] = useState("");
   const [audioUrls, setAudioUrls] = useState(["", "", ""]);
@@ -132,12 +129,8 @@ function App() {
 
   const generatedPayload = useMemo(() => {
     const targetDuration = clampTargetDuration(targetDurationSeconds);
-    const hasSpokenScript = Boolean(textPrompt.trim());
-    const directionParts = [
+    const textPromptParts = [
       prompt,
-      hasSpokenScript
-        ? ""
-        : "Write natural spoken copy, dialogue, or narration based on this direction. Do not read the text_prompt placeholder sentence aloud.",
       `Target length: approximately ${targetDuration} seconds. Keep the generated audio within this duration.`,
       imageUrl.trim()
         ? "Use the attached image as visual reference for the character, company, mood, and audio style."
@@ -145,8 +138,7 @@ function App() {
     ].filter(Boolean);
     const payload: Record<string, unknown> = {
       model: "seed-audio-1.0",
-      text_prompt: hasSpokenScript ? textPrompt : autoScriptTextPrompt,
-      prompt: directionParts.join("\n\n"),
+      text_prompt: textPromptParts.join("\n\n"),
       output_format: outputFormat,
       sample_rate: sampleRate,
       speed,
@@ -169,7 +161,6 @@ function App() {
     sampleRate,
     speed,
     targetDurationSeconds,
-    textPrompt,
     voice,
     volume,
   ]);
@@ -233,7 +224,6 @@ function App() {
       requestBody = useAdvancedPayload
         ? { advancedPayload: JSON.parse(advancedPayload) }
         : {
-            textPrompt,
             prompt,
             voice,
             audioUrls: [
@@ -340,18 +330,12 @@ function App() {
       <section className="grid">
         <form className="panel form-panel" onSubmit={submit}>
           <label className="field field-full">
-            <span>Spoken script (text_prompt, optional)</span>
-            <textarea value={textPrompt} onChange={(event) => setTextPrompt(event.target.value)} rows={5} />
+            <span>Prompt (text_prompt)</span>
+            <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={9} />
             <small>
-              Leave blank to let Seed Audio write its own script from the audio direction. If filled, this is the exact
-              text to speak.
+              Per the BytePlus guide, this is the required Seed Audio prompt field. Use it for the full scene request:
+              dialogue, narration, image guidance, music, ambience, and sound effects.
             </small>
-          </label>
-
-          <label className="field field-full">
-            <span>Audio direction (prompt)</span>
-            <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={6} />
-            <small>Use this for style, scene, mood, image instructions, music, ambience, and sound effects.</small>
           </label>
 
           <div className="field-row">
@@ -513,7 +497,7 @@ function App() {
             />
           </label>
 
-          <button disabled={isGenerating || (!textPrompt.trim() && !prompt.trim() && !useAdvancedPayload)} type="submit">
+          <button disabled={isGenerating || (!prompt.trim() && !useAdvancedPayload)} type="submit">
             {isGenerating ? "Generating..." : "Generate audio"}
           </button>
         </form>

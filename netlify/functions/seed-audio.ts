@@ -4,10 +4,8 @@ import { randomUUID } from "node:crypto";
 
 const DEFAULT_ENDPOINT =
   "https://voice.ap-southeast-1.bytepluses.com/api/v3/tts/create";
-const AUTO_SCRIPT_TEXT_PROMPT = "Generate suitable spoken copy from the prompt.";
 
 export type GenerateAudioRequest = {
-  textPrompt?: string;
   prompt?: string;
   voice?: string;
   audioUrls?: string[];
@@ -138,8 +136,6 @@ export const buildPayload = (input: GenerateAudioRequest) => {
     return input.advancedPayload;
   }
 
-  const explicitTextPrompt = cleanString(input.textPrompt);
-  const textPrompt = explicitTextPrompt || AUTO_SCRIPT_TEXT_PROMPT;
   const prompt = cleanString(input.prompt);
   const targetDuration = isFiniteNumber(input.targetDurationSeconds)
     ? Math.min(120, Math.max(1, Math.round(input.targetDurationSeconds)))
@@ -147,18 +143,10 @@ export const buildPayload = (input: GenerateAudioRequest) => {
   const audioUrls = Array.isArray(input.audioUrls)
     ? input.audioUrls.map(cleanString).filter(Boolean).slice(0, 3)
     : [];
-  const payload: Record<string, unknown> = {
-    model: "seed-audio-1.0",
-    text_prompt: textPrompt,
-  };
-
   const voice = cleanString(input.voice);
   const imageUrl = cleanString(input.imageUrl);
-  const promptParts = [
+  const textPromptParts = [
     prompt,
-    explicitTextPrompt
-      ? ""
-      : "Write natural spoken copy, dialogue, or narration based on this direction. Do not read the text_prompt placeholder sentence aloud.",
     targetDuration
       ? `Target length: approximately ${targetDuration} seconds. Keep the generated audio within this duration.`
       : "",
@@ -166,8 +154,11 @@ export const buildPayload = (input: GenerateAudioRequest) => {
       ? "Use the attached image as visual reference for the character, company, mood, and audio style."
       : "",
   ].filter(Boolean);
+  const payload: Record<string, unknown> = {
+    model: "seed-audio-1.0",
+    text_prompt: textPromptParts.join("\n\n"),
+  };
 
-  if (promptParts.length > 0) payload.prompt = promptParts.join("\n\n");
   if (voice) payload.voice = voice;
   if (audioUrls.length > 0) payload.audio_urls = audioUrls;
   if (imageUrl) payload.image_url = imageUrl;

@@ -13,13 +13,12 @@ https://voice.ap-southeast-1.bytepluses.com/api/v3/tts/create
 
 ## Features
 
-- Separate optional spoken script (`text_prompt`) and audio direction (`prompt`) fields, so Seed
-  Audio can either speak exact copy or write its own copy from your direction.
+- Single BytePlus `text_prompt` prompt field for full Seed Audio scene requests.
 - Optional voice, output format, sample rate, speed, volume, pitch, image URL, and up to three
   reference audio URLs.
 - Local audio/image attachments. The app uploads them to Netlify Blobs and exposes temporary public
   URLs for Seed Audio to fetch.
-- Target length control by adding an explicit duration instruction to `prompt`.
+- Target length control by adding an explicit duration instruction to `text_prompt`.
 - Advanced raw JSON payload override for newly released BytePlus request fields.
 - Audio playback/download when the API response contains an audio URL or data URI.
 - Raw response viewer for debugging request IDs and upstream API responses.
@@ -87,14 +86,11 @@ npm run netlify:deploy
   three local audio attachments or URLs, referenced in the prompt as `@Audio1`, `@Audio2`, and
   `@Audio3`.
 - Seed Audio image references cannot be combined with audio references.
+- The Lark guide describes `text_prompt` as "Prompt or text to synthesize." Put the full Seed Audio
+  instruction there, including scene, dialogue, music, ambience, sound effects, and image guidance.
 - The docs and current BytePlus endpoint do not expose a reliable separate input field for exact
-  output duration. The app controls length by inserting a target-duration sentence into `prompt`;
-  keep direction prompts explicit, for example "make this 45 seconds".
-- Leave **Spoken script** blank to let Seed Audio generate copy from **Audio direction**. The
-  BytePlus endpoint still requires a non-empty `text_prompt`, so the app sends a short internal
-  placeholder and tells the model not to read that placeholder aloud.
-- If you do fill **Spoken script**, put only the words to be spoken there. Put radio-ad concepts,
-  image guidance, music, ambience, sound effects, and style notes in **Audio direction**.
+  output duration. The app controls length by inserting a target-duration sentence into
+  `text_prompt`; keep prompts explicit, for example "make this 45 seconds".
 - The voice/cloned voice field is sent as `voice` in normal mode. If **Use advanced raw request
   payload** is enabled, the JSON editor is authoritative, so add or edit `voice` there too.
 - If BytePlus changes optional request fields, enable **Use advanced raw request payload** in the app
