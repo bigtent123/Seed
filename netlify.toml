@@ -1,0 +1,40 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[dev]
+  command = "npm run dev"
+  targetPort = 5173
+  port = 8888
+  publish = "dist"
+
+[[redirects]]
+  from = "/api/generate-audio"
+  to = "/.netlify/functions/generate-audio"
+  status = 200
+
+[[redirects]]
+  from = "/api/generate-audio-status"
+  to = "/.netlify/functions/generate-audio-status"
+  status = 200
+
+[[redirects]]
+  from = "/api/upload-reference"
+  to = "/.netlify/functions/upload-reference"
+  status = 200
+
+[[redirects]]
+  from = "/api/reference-file"
+  to = "/.netlify/functions/reference-file"
+  status = 200
+
+[[redirects]]
+  from = "/api/reference-file/*"
+  to = "/.netlify/functions/reference-file?id=:splat"
+  status = 200
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
