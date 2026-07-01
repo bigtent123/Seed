@@ -12,7 +12,7 @@ const getBackgroundUrl = (request: Request) => {
   const protocol = request.headers.get("x-forwarded-proto") || requestUrl.protocol.replace(":", "");
   const host = request.headers.get("host") || requestUrl.host;
 
-  return `${protocol}://${host}/.netlify/functions/generate-audio-worker`;
+  return `${protocol}://${host}/.netlify/functions/generate-audio-background`;
 };
 
 export default async (request: Request) => {

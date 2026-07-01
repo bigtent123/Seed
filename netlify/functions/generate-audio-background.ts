@@ -1,4 +1,3 @@
-import type { Config } from "@netlify/functions";
 import {
   generateSeedAudio,
   type GenerateAudioRequest,
@@ -10,10 +9,6 @@ import {
 type WorkerPayload = {
   jobId?: string;
   input?: GenerateAudioRequest;
-};
-
-export const config: Config = {
-  background: true,
 };
 
 export default async (request: Request) => {

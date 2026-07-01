@@ -3,9 +3,9 @@
 A Netlify-ready React app for generating audio with BytePlus Seed Audio 1.0.
 
 The browser never receives your Seed Audio key. Requests go through a Netlify Function at
-`/api/generate-audio`, which creates a job and starts a Netlify background function. The browser
-polls `/api/generate-audio-status` until the worker finishes. The worker adds the required BytePlus
-authentication headers and forwards the payload to:
+`/api/generate-audio`, which creates a job and starts the `generate-audio-background` Netlify
+background function. The browser polls `/api/generate-audio-status` until the worker finishes. The
+worker adds the required BytePlus authentication headers and forwards the payload to:
 
 ```txt
 https://voice.ap-southeast-1.bytepluses.com/api/v3/tts/create
